@@ -70,6 +70,8 @@ git push origin main
 - 构建前执行 `git fetch origin main:refs/remotes/origin/main`，因为 `versionCode` 来自该 ref；否则可能退回 `1`。
 - 执行 `git fetch --tags --force`，否则 `versionName` 取不到 tag。
 - JDK 21；Android SDK 需要 `platforms;android-37.0`、`build-tools;37.0.0`、`ndk;29.0.14206865`、`cmake;3.22.1`。
+- 使用 `android-actions/setup-android@v4`；v3 会尝试安装已下线的 `tools` 包并失败。
+- 已验证 workflow 能完成构建；未配置签名 secrets 时 `Configure signing` 会跳过，产物是 debug 签名。
 - 签名通过 GitHub Secrets 注入，绝不提交 keystore 或密码：
   - `ANDROID_KEYSTORE_BASE64`
   - `ANDROID_STORE_PASSWORD`

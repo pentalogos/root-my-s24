@@ -63,7 +63,7 @@ jobs:
           } >> "$HOME/.gradle/gradle.properties"
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
 
       - name: Build release APK
         run: ./gradlew :app:assembleRelease --console=plain
@@ -77,7 +77,7 @@ jobs:
           sha256sum ./*.apk > SHA256SUMS
 
       - name: Upload APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: RootMyS24-selfuse-${{ github.run_number }}
           path: dist/
