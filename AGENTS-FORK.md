@@ -30,19 +30,22 @@ feat/ksu-disable     可选的上游 PR 分支，只包含可提交的功能改�
 
 ## 提交划分
 
-通用功能提交：
+通用功能提交（可进 `feat/*` PR）：
 
-- `RootViewModel.kt`：late-load 前禁用 KSU 模块、KSU 3.3.0 内置兜底、helper `-c` 调用修复。
+- `RootViewModel.kt`：late-load 前禁用 KSU 模块、helper `-c` 调用修复。
 - `SettingsScreen.kt`：设置开关。
-- `FirmwareSelectActivity.kt`：KSU 版本不可用提示。
 - `values*/strings.xml`：对应文案。
 
-自用提交：
+自用提交（只留在 `main`）：
 
+- `RootViewModel.kt`：KSU 3.3.0 内置兜底（DZF2 / CZB2_CHC / S9210DZI1）。
+- `FirmwareSelectActivity.kt`：KSU 版本不可用提示。
 - `LogUploader.kt`：`DEFAULT_ENDPOINT = ""`。
 - `PayloadStatus.kt`：`ENDPOINT = ""`。
 
-不要把以上两类混成一个准备提 PR 的提交。自用提交可以留在 `main`，不要放进 `feat/*`。
+内置 KSU 兜底和对应 UI 提示只服务非官方构建，**不要放进 `feat/*` PR**，否则会让上游 PR 混入
+自用构建需求。不要把以上两类混成一个准备提 PR 的提交。自用提交可以留在 `main`，不要放进
+`feat/*`。
 
 ## 同步上游
 
