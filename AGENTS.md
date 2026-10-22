@@ -103,3 +103,8 @@ keytool -genkeypair -v -keystore my.keystore -alias mykey \
 同型号不同地区、甚至**同构建号**的内核，偏移都可能不同
 （e3q 与 e1q 同为 `…-android14-11-3254743-…` 却有 11 项偏移不同）。
 详见 `docs/` 下的移植报告。**照抄别人的载荷大概率失败，甚至 kernel panic。**
+
+## Fork 维护
+
+本仓库 fork 后的分支模型、Actions 自编译、签名、构建产物和发布规则见
+[AGENTS-FORK.md](AGENTS-FORK.md)。未经用户明确要求，不创建或更新 PR。
