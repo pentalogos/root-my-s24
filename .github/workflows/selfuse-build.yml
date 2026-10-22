@@ -1,0 +1,85 @@
+name: Self-use build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: selfuse-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch version refs
+        run: |
+          git fetch origin main:refs/remotes/origin/main
+          git fetch --tags --force
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android components
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager \
+            "platforms;android-37.0" \
+            "build-tools;37.0.0" \
+            "ndk;29.0.14206865" \
+            "cmake;3.22.1"
+
+      - name: Configure signing
+        if: env.KEYSTORE_B64 != ''
+        env:
+          STORE_PASS: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/selfuse.keystore"
+          chmod 600 "$RUNNER_TEMP/selfuse.keystore"
+          mkdir -p "$HOME/.gradle"
+          {
+            printf 'androidStoreFile=%s\n' "$RUNNER_TEMP/selfuse.keystore"
+            printf 'androidStorePassword=%s\n' "$STORE_PASS"
+            printf 'androidKeyAlias=%s\n' "$KEY_ALIAS"
+            printf 'androidKeyPassword=%s\n' "$KEY_PASS"
+          } >> "$HOME/.gradle/gradle.properties"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build release APK
+        run: ./gradlew :app:assembleRelease --console=plain
+
+      - name: Collect APK
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/release/app-release.apk \
+            "dist/RootMyS24-${GITHUB_SHA::7}.apk"
+          cd dist
+          sha256sum ./*.apk > SHA256SUMS
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: RootMyS24-selfuse-${{ github.run_number }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
