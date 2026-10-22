@@ -13,8 +13,6 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
 
     steps:
       - name: Checkout
@@ -46,12 +44,16 @@ jobs:
             "cmake;3.22.1"
 
       - name: Configure signing
-        if: env.KEYSTORE_B64 != ''
         env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           STORE_PASS: ${{ secrets.ANDROID_STORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "No signing secret; Gradle will fall back to debug signing."
+            exit 0
+          fi
           echo "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/selfuse.keystore"
           chmod 600 "$RUNNER_TEMP/selfuse.keystore"
           mkdir -p "$HOME/.gradle"
@@ -68,6 +70,11 @@ jobs:
       - name: Build release APK
         run: ./gradlew :app:assembleRelease --console=plain
 
+      - name: Verify APK signature
+        run: |
+          "$ANDROID_HOME/build-tools/37.0.0/apksigner" verify --print-certs \
+            app/build/outputs/apk/release/app-release.apk
+
       - name: Collect APK
         run: |
           mkdir -p dist
@@ -83,3 +90,7 @@ jobs:
           path: dist/
           if-no-files-found: error
           retention-days: 14
+
+      - name: Remove signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/selfuse.keystore" "$HOME/.gradle/gradle.properties"

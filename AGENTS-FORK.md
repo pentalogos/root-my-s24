@@ -72,6 +72,7 @@ git push origin main
 - JDK 21；Android SDK 需要 `platforms;android-37.0`、`build-tools;37.0.0`、`ndk;29.0.14206865`、`cmake;3.22.1`。
 - 使用 `android-actions/setup-android@v4`；v3 会尝试安装已下线的 `tools` 包并失败。
 - 已验证 workflow 能完成构建；未配置签名 secrets 时 `Configure signing` 会跳过，产物是 debug 签名。
+- 当前 fork 已配置签名 secrets，使用项目专属 `rms24` 自用证书；workflow 会用 `apksigner verify --print-certs` 输出证书 SHA-256。该证书 SHA-256 为 `13:7F:B4:63:1C:76:FF:60:6F:40:44:5B:F0:B4:F4:12:28:A7:CC:03:9A:1C:D8:E6:8A:51:F3:6E:89:42:63:2F`。
 - 签名通过 GitHub Secrets 注入，绝不提交 keystore 或密码：
   - `ANDROID_KEYSTORE_BASE64`
   - `ANDROID_STORE_PASSWORD`
