@@ -118,6 +118,9 @@ git push origin main
 ```bash
 rm -rf build app/build manager-ui/build services/*/build .gradle .kotlin
 rm -f local.properties .DS_Store app/.DS_Store manager-ui/.DS_Store services/.DS_Store
+
+# 可选：本地不再构建时，清掉全局 Gradle 缓存；保留 gradle.properties 里的签名凭据
+find "$HOME/.gradle" -mindepth 1 -maxdepth 1 ! -name gradle.properties -exec rm -rf {} +
 ```
 
 需要分发 APK 时：
