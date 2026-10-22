@@ -83,7 +83,8 @@ git push origin main
   - `ANDROID_KEY_PASSWORD`
 - 没有签名 secret 时 Gradle 会回退 debug 签名；这种 APK 不能覆盖已安装的自用 release 版，只适合临时测试。
 - APK 作为 Actions artifact 或 GitHub Release 附件，不提交进 git。
-- 默认只做手动 `workflow_dispatch`；等 secrets 配好、验证过签名后，再考虑加 `push: branches: [main]` 自动构建。
+- 当前触发器：`push` 到 `main`（忽略 Markdown 和 `docs/`）+ 手动 `workflow_dispatch`。
+  跟进上游后推 `main` 即自动构建，不再依赖本地编译。
 
 `versionCode` 注意：
 
@@ -104,6 +105,20 @@ git push origin main
 - Downloads 里的 APK、AAB、日志
 
 仓库中已有的 `app/src/main/assets/bakasu-manager.apk`、`libadb.so`、payload 文件是源码资产，不是本次编译产物，保留。
+
+### 本地只保留仓库
+
+- 不在本地执行 `assembleRelease`；所有构建走 GitHub Actions。
+- 本地只保留 git 仓库、源码和文档，`build/`、`.gradle/`、`.kotlin/`、`local.properties`、`.DS_Store` 一律清掉。
+- 跟进上游后只需 `git fetch upstream && git merge upstream/main && git push origin main`，
+  Actions 自动构建，从 run 页面下载 artifact。
+- 不把 APK 拉回本地长期保存；需要安装时下载后直接 `adb install -r`，随后删除。
+- 清理命令：
+
+```bash
+rm -rf build app/build manager-ui/build services/*/build .gradle .kotlin
+rm -f local.properties .DS_Store app/.DS_Store manager-ui/.DS_Store services/.DS_Store
+```
 
 需要分发 APK 时：
 
