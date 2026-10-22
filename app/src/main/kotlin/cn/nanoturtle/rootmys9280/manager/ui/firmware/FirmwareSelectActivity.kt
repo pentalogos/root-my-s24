@@ -241,6 +241,18 @@ private fun FirmwareSelectContent(
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        if (vm.ksuPreferenceUnavailable(firmwareVersion, ksuPref)) {
+                            Text(
+                                text =
+                                    stringResource(
+                                        R.string.rootflow_ksu_unavailable,
+                                        ksuPref.orEmpty(),
+                                    ),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(top = 4.dp),
+                            )
+                        }
                     }
                 }
             }

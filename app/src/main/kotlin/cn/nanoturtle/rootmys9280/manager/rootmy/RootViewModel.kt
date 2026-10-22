@@ -330,6 +330,17 @@ class RootViewModel(app: Application) : AndroidViewModel(app) {
     /** BakaSU 实验内核（三星 KDP/RKP/DEFEX 适配版）。默认关闭。 */
     private val KEY_BAKASU_KERNEL = "bakasu_kernel"
 
+    /**
+     * late-load 前禁用已安装的 KernelSU 模块。默认关闭。
+     *
+     * 移植自 fawyrad/Root-My-Galaxy 的「Disable KSU Modules」：冲突模块
+     * （如 Mountify、bromitewebview）会在 late-load 加载驱动后立刻执行
+     * post-fs-data/uninstall 脚本，把设备直接重启，导致临时 root 永远拿不到。
+     * 开启后先把 /data/adb/modules 与 /data/adb/modules_update 移走，
+     * 让 ksud 加载时看到空模块树。
+     */
+    private val KEY_DISABLE_KSU_MODULES = "disable_ksu_modules"
+
     /** 当前 shell 执行器（Shizuku 或无线调试 adb），全部命令经由此执行。 */
     var shellExecutor: ShellExecutor = ShizukuController
         private set
@@ -581,6 +592,7 @@ class RootViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun ksuOptions(v: FirmwareVersion): List<PayloadStatus.KsuOption> {
         val online = payloadEntry(v)?.ksu.orEmpty().filter { it.appliesTo(deviceBuildTag) }
+        val builtIn = builtInKsuOptions(v).filter { it.appliesTo(deviceBuildTag) }
         val fallback =
             PayloadStatus.KsuOption(
                 asset = v.ksud,
@@ -588,8 +600,36 @@ class RootViewModel(app: Application) : AndroidViewModel(app) {
                 state = "stable",
                 version = defaultKsuVersion(v.ksud),
             )
-        return (online + fallback).distinctBy { it.version.ifBlank { it.asset } }
+        return (online + builtIn + fallback).distinctBy { it.version.ifBlank { it.asset } }
     }
+
+    /**
+     * APK 内置的 KSU 3.3.0 兜底表。
+     *
+     * 非官方构建不会请求官方 `payloads.php`，如果只靠条目默认的 `v.ksud`，
+     * DZI1 / DZF2 / CZB2 会被锁死在 3.2.5。这里补回已经随 APK 打包、
+     * 且核对过适用构建的 3.3.0 资产；在线清单存在时仍以在线清单为准。
+     */
+    private fun builtInKsuOptions(v: FirmwareVersion): List<PayloadStatus.KsuOption> =
+        when (v) {
+            FirmwareVersion.DZF2 ->
+                listOf(
+                    ksuOption330("ksud-dzh3-32601", "*DZH3"),
+                    ksuOption330("ksud-dzf2-32601", "*DZF2"),
+                )
+            FirmwareVersion.CZB2_CHC -> listOf(ksuOption330("ksud-czb2-32601", "*CZB2"))
+            FirmwareVersion.S9210DZI1 -> listOf(ksuOption330("ksud-dzh3-32601", "*DZI1"))
+            else -> emptyList()
+        }
+
+    private fun ksuOption330(asset: String, device: String) =
+        PayloadStatus.KsuOption(
+            asset = asset,
+            label = "3.3.0",
+            state = "stable",
+            version = "3.3.0",
+            devices = listOf(device),
+        )
 
     /** 该条目能选的版本号（给顶部选择行用）。 */
     fun ksuVersionsFor(v: FirmwareVersion): List<String> =
@@ -885,6 +925,16 @@ class RootViewModel(app: Application) : AndroidViewModel(app) {
     val bakasuKernelEnabled: Boolean
         get() = app.getSharedPreferences(PREFS_SETTINGS, android.content.Context.MODE_PRIVATE)
             .getBoolean(KEY_BAKASU_KERNEL, false)
+
+    /** 设置页开关：late-load 前把已安装的 KernelSU 模块目录移走。读 prefs 实时生效。 */
+    fun setDisableKsuModules(enabled: Boolean) {
+        app.getSharedPreferences(PREFS_SETTINGS, android.content.Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_DISABLE_KSU_MODULES, enabled).apply()
+    }
+
+    val disableKsuModules: Boolean
+        get() = app.getSharedPreferences(PREFS_SETTINGS, android.content.Context.MODE_PRIVATE)
+            .getBoolean(KEY_DISABLE_KSU_MODULES, false)
 
     /** 调试选项：自动保存日志到磁盘（崩溃/重启后自动恢复）。默认开启。 */
     fun setAutoSaveLog(enabled: Boolean) {
@@ -1376,7 +1426,7 @@ class RootViewModel(app: Application) : AndroidViewModel(app) {
                 val apk = copyToTmp("bakasu-manager.apk", "/data/local/tmp/bakasu-manager.apk", "644")
                 appendLog("◆ 安装 BakaSU 管理器（${apk.length() / 1024 / 1024} MB）…")
                 val r = shellExecutor.shell(
-                    "$tmpRootHelper sh -c 'pm install -r /data/local/tmp/bakasu-manager.apk' 2>&1"
+                    "$tmpRootHelper -c 'pm install -r /data/local/tmp/bakasu-manager.apk' 2>&1"
                 )
                 appendLog(
                     if (r.first == 0) "✔ BakaSU 管理器已安装"
@@ -1391,6 +1441,13 @@ class RootViewModel(app: Application) : AndroidViewModel(app) {
         if (autoScreenOff) {
             runCatching { shellExecutor.shell("input keyevent 26") }
             appendLog("◆ 已唤醒屏幕（竞态阶段结束，不再需要熄屏）")
+        }
+
+        // 4. 按需禁用 KernelSU 模块：必须在 drivers load 之前完成。
+        //    冲突模块的 post-fs-data / uninstall 脚本会在驱动加载后立刻执行，
+        //    最坏情况直接把设备重启（issue #407），所以这一步只能抢在 late-load 前。
+        if (disableKsuModules) {
+            disableKsuModulesBeforeLateLoad()
         }
 
         // 4. KernelSU late-load（经 root 守护进程 temp_su.sock 以 root 执行）
@@ -1422,7 +1479,7 @@ class RootViewModel(app: Application) : AndroidViewModel(app) {
         // Manager 不认」——只有内核 dmesg 能说出第一次 finit_module 到底是被
         // vermagic / 签名 / KDP 哪一道拦下。root 通道是同一个 $tmpRootHelper。
         val diag = shellExecutor.shell(
-            "$tmpRootHelper sh -c 'dmesg 2>/dev/null | grep -iE " +
+            "$tmpRootHelper -c 'dmesg 2>/dev/null | grep -iE " +
             "\"kernelsu|finit_module|insmod|vermagic|module|cfi|defex|kdp|rkp|denied|unauthorized|signature\" | tail -60' 2>&1"
         )
         appendLog("◆ dmesg(内核判定): exit=${diag.first}\n${diag.second.trim().takeLast(2500)}")
@@ -1459,6 +1516,57 @@ class RootViewModel(app: Application) : AndroidViewModel(app) {
         if (donationManager.recordSuccess()) {
             _donationEvent.tryEmit(donationManager.successCount)
         }
+    }
+
+    /**
+     * late-load 前把 KernelSU 模块目录移走（移植自 fawyrad 的 Disable KSU Modules）。
+     *
+     * 只改名、不删除：`/data/adb/modules` → `/data/adb/modules_bak`，若备份名已存在
+     * 就追加序号。`modules_update` 同理，避免待更新模块的脚本也被执行。
+     * 这样 ksud 加载驱动时看到的是空模块树，冲突模块不会在 root 刚拿到时把设备重启。
+     *
+     * 用临时 root 守护进程执行（/data/adb 属 root，shell 无权改名）；失败时直接
+     * 中止本次运行，而不是继续 late-load —— 继续的代价是设备重启、日志全丢。
+     */
+    private fun disableKsuModulesBeforeLateLoad() {
+        val script = """
+            set -e
+            moved=""
+            for dir in /data/adb/modules /data/adb/modules_update; do
+                if [ -d "${'$'}dir" ]; then
+                    bak="${'$'}{dir}_bak"
+                    if [ -e "${'$'}bak" ]; then
+                        n=1
+                        while [ -e "${'$'}{bak}_${'$'}n" ]; do n=${'$'}((n + 1)); done
+                        bak="${'$'}{bak}_${'$'}n"
+                    fi
+                    /system/bin/mv "${'$'}dir" "${'$'}bak"
+                    /system/bin/chmod 755 "${'$'}bak"
+                    moved="${'$'}moved ${'$'}bak"
+                fi
+            done
+            echo "RMS24_MODULES_DISABLED:${'$'}moved"
+        """.trimIndent()
+        val (code, output) = shellExecutor.shell("$tmpRootHelper -c '$script' 2>&1")
+        require(code == 0 && output.contains("RMS24_MODULES_DISABLED:")) {
+            app.getString(
+                R.string.log_disable_ksu_modules_fail,
+                code,
+                output.trim().takeLast(200),
+            )
+        }
+        val moved = output.lineSequence()
+            .firstOrNull { it.startsWith("RMS24_MODULES_DISABLED:") }
+            ?.substringAfter(':')
+            ?.trim()
+            .orEmpty()
+        appendLog(
+            "✔ " + if (moved.isEmpty()) {
+                app.getString(R.string.log_disable_ksu_modules_empty)
+            } else {
+                app.getString(R.string.log_disable_ksu_modules_done, moved)
+            }
+        )
     }
 
     /** 发送 Root 成功通知（熄屏/后台时告知用户；亮屏提示可能被系统省略）。 */
