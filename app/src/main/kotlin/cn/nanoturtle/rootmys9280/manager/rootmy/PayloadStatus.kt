@@ -28,7 +28,7 @@ import org.json.JSONObject
 object PayloadStatus {
 
     private const val TAG = "PayloadStatus"
-    private const val ENDPOINT = "https://blog.nanoturtle.cn/rms24_api/payloads.php"
+    private const val ENDPOINT = ""
     private const val PREFS = "payload_status"
     private const val KEY_JSON = "json"
     private const val KEY_AT = "fetched_at"

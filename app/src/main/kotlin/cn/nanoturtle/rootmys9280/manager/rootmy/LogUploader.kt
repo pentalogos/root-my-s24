@@ -28,7 +28,7 @@ object LogUploader {
      * 域名必须是 `blog.nanoturtle.cn` 而非 `ntblog.cn`：服务器证书的 SAN 只包含前者，
      * 用后者 Android 会因证书域名不匹配直接拒绝握手。
      */
-    const val DEFAULT_ENDPOINT = "https://blog.nanoturtle.cn/rms24_api/api.php"
+    const val DEFAULT_ENDPOINT = ""
 
     /**
      * 收集端令牌。它编译进 APK，反编译即可拿到，因此只用于挡掉扫描器与误撞，
